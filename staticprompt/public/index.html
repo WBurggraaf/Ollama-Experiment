@@ -118,7 +118,7 @@
 
                 <h2>Response:</h2>
                 <pre id="response"></pre>
-                <h3>Inference Start Time: <span id="start-time">-</span></h3>
+                <h3>Start Time: <span id="start-time">-</span></h3>
             </div>
 
             <!-- Power Usage Monitoring Section -->
@@ -139,7 +139,7 @@
 
     <script>
         let chart;
-        
+
         async function sendPrompt() {
             const promptText = document.getElementById('prompt').value;
             const responseElement = document.getElementById('response');
@@ -173,16 +173,27 @@
 
         // Plotting power usage data and calculating total joules
         function plotPowerUsage(powerUsageData) {
-            const timestamps = powerUsageData.map(d => (d.timestamp - powerUsageData[0].timestamp) / 1000);  // Convert ms to seconds
+            const timestamps = powerUsageData.map(d => (d.timestamp - powerUsageData[0].timestamp));  // Keep ms values
             const watts = powerUsageData.map(d => d.joules_per_ms * 1000);  // Convert J/ms to W
 
-            // Calculate total joules by integrating power over time
-            const totalJoules = powerUsageData.reduce((acc, d) => acc + d.joules_per_ms, 0).toFixed(2);
-            document.getElementById('total-joules').textContent = totalJoules;
+            // Calculate energy used in each interval and accumulate
+            const energyUsage = [];
+            let totalJoules = 0;
+
+            for (let i = 1; i < timestamps.length; i++) {
+                const deltaTime = timestamps[i] - timestamps[i - 1];  // Time difference in ms
+                const powerUsed = watts[i - 1];  // Power in Watts during the previous interval
+
+                // Energy used in Joules = Power (W) * Time (s)
+                const energy = (powerUsed * (deltaTime / 1000));  // Convert ms to seconds
+                energyUsage.push(energy);
+                totalJoules += energy;
+            }
 
             // Calculate average power consumption in Watts
             const averagePower = (watts.reduce((acc, watt) => acc + watt, 0) / watts.length).toFixed(2);
             document.getElementById('average-power').textContent = averagePower;
+            document.getElementById('total-joules').textContent = totalJoules.toFixed(2);
 
             const ctx = document.getElementById('powerUsageChart').getContext('2d');
             if (chart) {
@@ -192,7 +203,7 @@
             chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: timestamps,
+                    labels: timestamps.map(ts => (ts - timestamps[0]) / 1000),  // Convert to seconds for the x-axis
                     datasets: [{
                         label: 'Power (Watts)',
                         data: watts,
