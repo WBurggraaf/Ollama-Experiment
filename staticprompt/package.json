@@ -1,0 +1,20 @@
+{
+  "name": "ollama-prompt",
+  "version": "1.0.0",
+  "description": "A simple Node.js app to interact with the Ollama API",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.1",
+    "node-fetch": "^2.7.0",
+    "punycode": "^2.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

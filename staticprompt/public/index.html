@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wilco's Prompting Power Usage Experiment ☺</title>
+    <style>
+        /* Basic dark mode styling */
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
+        }
+
+        /* Flex layout for larger screens */
+        .content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+        }
+
+        /* Side-by-side layout on larger screens */
+        @media (min-width: 768px) {
+            .content {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+        }
+
+        .prompt-section, .graph-section {
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+            width: 100%;
+            max-width: 500px;
+            box-sizing: border-box;
+        }
+
+        .graph-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: #bb86fc;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-top: 1em;
+        }
+
+        input[type="text"] {
+            background-color: #333;
+            color: #ffffff;
+            border: 1px solid #555;
+            padding: 8px;
+            width: 100%;
+            border-radius: 4px;
+            outline: none;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #bb86fc;
+            color: #121212;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #9c5af8;
+        }
+
+        pre {
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+            padding: 10px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 600px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Wilco's Prompting Power Usage Experiment ☺</h1>
+        <div class="content">
+            <!-- Prompt and Response Section -->
+            <div class="prompt-section">
+                <label for="prompt">Enter your prompt:</label>
+                <input type="text" id="prompt" placeholder="What’s on the breakfast menu for eco-friendly coders?" />
+                <button onclick="sendPrompt()">Send Prompt</button>
+
+                <h2>Response:</h2>
+                <pre id="response"></pre>
+                <h3>Inference Start Time: <span id="start-time">-</span></h3>
+            </div>
+
+            <!-- Power Usage Monitoring Section -->
+            <div class="graph-section">
+                <h2>Power Usage Monitoring</h2>
+                <p><strong>GPU Model:</strong> NVIDIA GeForce RTX 4060</p>
+                <p><strong>Max Power:</strong> Configured to 80W (TGP may vary up to 115W+ in some configurations)</p>
+                <p><strong>Memory:</strong> 8 GB (note: desktop variants may offer more memory)</p>
+                <canvas id="powerUsageChart" width="400" height="300"></canvas>
+                <h3>Average Power Consumption (Watts): <span id="average-power">0</span> W</h3>
+                <h3>Total Energy Consumption: <span id="total-joules">0</span> Joules</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        let chart;
+        
+        async function sendPrompt() {
+            const promptText = document.getElementById('prompt').value;
+            const responseElement = document.getElementById('response');
+            const startTimeElement = document.getElementById('start-time');
+            responseElement.textContent = "Loading...";
+
+            // Record the start time and display it in the UI
+            const startTime = new Date();
+            startTimeElement.textContent = startTime.toLocaleString();
+
+            try {
+                const response = await fetch('/api/prompt-with-power', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    responseElement.textContent = JSON.stringify(data.ollamaResponse, null, 2);
+                    plotPowerUsage(data.powerUsageData);
+                } else {
+                    responseElement.textContent = `Error: ${response.status} - ${response.statusText}`;
+                }
+            } catch (error) {
+                responseElement.textContent = "Error: " + error.message;
+            }
+        }
+
+        // Plotting power usage data and calculating total joules
+        function plotPowerUsage(powerUsageData) {
+            const timestamps = powerUsageData.map(d => (d.timestamp - powerUsageData[0].timestamp) / 1000);  // Convert ms to seconds
+            const watts = powerUsageData.map(d => d.joules_per_ms * 1000);  // Convert J/ms to W
+
+            // Calculate total joules by integrating power over time
+            const totalJoules = powerUsageData.reduce((acc, d) => acc + d.joules_per_ms, 0).toFixed(2);
+            document.getElementById('total-joules').textContent = totalJoules;
+
+            // Calculate average power consumption in Watts
+            const averagePower = (watts.reduce((acc, watt) => acc + watt, 0) / watts.length).toFixed(2);
+            document.getElementById('average-power').textContent = averagePower;
+
+            const ctx = document.getElementById('powerUsageChart').getContext('2d');
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: [{
+                        label: 'Power (Watts)',
+                        data: watts,
+                        fill: false,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time (seconds)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Power (Watts)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
